@@ -3,6 +3,7 @@
 ## Notes: Lightweight healer tools for Blizzard raid frames.
 ## Author: Ben
 ## Version: 0.1.0
-## SavedVariables: UnderhealDB
+## SavedVariables: UnderhealLegacyDB
+## SavedVariablesPerCharacter: UnderhealCharacterDB
 
 Underheal.lua
