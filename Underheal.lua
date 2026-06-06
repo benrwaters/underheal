@@ -1,6 +1,5 @@
 local ADDON_NAME = ...
 
-UnderhealLegacyDB = UnderhealLegacyDB or UnderhealDB or {}
 UnderhealCharacterDB = UnderhealCharacterDB or {}
 UnderhealDB = UnderhealCharacterDB
 
@@ -18,17 +17,17 @@ local KNOCKED_LOSS_OF_CONTROL_TYPES = {
 
 local defaults = {
 	raidFrame = {
-		unlocked = false,
+		unlocked = true,
 		grouped = true,
 		groupGap = 24,
 		groupsPerRow = 4,
 		showPets = true,
 		showTanks = true,
 		showTargetOfTarget = false,
+		targetOfTargetOptIn = false,
 			showBuffButtons = true,
 			showBuffColors = true,
 			clickToBuff = true,
-			superResponsiveMode = false,
 			showMagicDebuffs = true,
 			showDiseaseDebuffs = true,
 			showPoisonDebuffs = false,
@@ -66,6 +65,12 @@ local defaults = {
 		hasPosition = false,
 		setupConfirmed = false,
 		x = 250,
+		y = 520,
+	},
+	resourceStats = {
+		enabled = false,
+		hasPosition = false,
+		x = 520,
 		y = 520,
 	},
 	powerInfusion = {
@@ -175,6 +180,12 @@ local recommendedPresets = {
 			{ key = "fearward", label = "W", cast = "Fear Ward", aura = "Fear Ward", enabled = true, classes = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true, ROGUE = true, SHAMAN = true, WARLOCK = true, WARRIOR = true }, missingColor = { r = 0.55, g = 0.32, b = 0.14 }, priorityColor = { r = 0.95, g = 0.45, b = 0.08 }, clickPriority = 500, combatPriority = true, hideWarningOnCooldown = true, warnBeforeExpirySeconds = 60, priorityRoles = { TANK = true, HEALER = true } },
 		},
 		clickCasts = {
+			none = { left = "Flash Heal", right = "Renew", useTrinkets = false },
+			ctrl = { left = "Flash Heal", right = "", useTrinkets = false },
+			shift = { left = "Heal", right = "", useTrinkets = false },
+			alt = { left = "", right = "", useTrinkets = false },
+		},
+		clickCasts60 = {
 			none = { left = "Flash Heal(Rank 4)", right = "Renew", useTrinkets = false },
 			ctrl = { left = "Flash Heal", right = "", useTrinkets = false },
 			shift = { left = "Heal(Rank 3)", right = "", useTrinkets = false },
@@ -195,6 +206,12 @@ local recommendedPresets = {
 			shift = { left = "", right = "", useTrinkets = false },
 			alt = { left = "", right = "", useTrinkets = false },
 		},
+		clickCasts60 = {
+			none = { left = "Flash of Light(Rank 4)", right = "Holy Light", useTrinkets = false },
+			ctrl = { left = "Holy Light", right = "", useTrinkets = false },
+			shift = { left = "Flash of Light", right = "", useTrinkets = false },
+			alt = { left = "", right = "", useTrinkets = false },
+		},
 		powerInfusion = { enabled = false, spell = "", label = "", targetClass = "", chosenPlayer = "" },
 	},
 	DRUID = {
@@ -207,6 +224,12 @@ local recommendedPresets = {
 			none = { left = "Healing Touch", right = "Rejuvenation", useTrinkets = false },
 			ctrl = { left = "Regrowth", right = "", useTrinkets = false },
 			shift = { left = "", right = "", useTrinkets = false },
+			alt = { left = "", right = "", useTrinkets = false },
+		},
+		clickCasts60 = {
+			none = { left = "Healing Touch(Rank 4)", right = "Rejuvenation", useTrinkets = false },
+			ctrl = { left = "Regrowth", right = "", useTrinkets = false },
+			shift = { left = "Healing Touch", right = "", useTrinkets = false },
 			alt = { left = "", right = "", useTrinkets = false },
 		},
 		powerInfusion = { enabled = false, spell = "", label = "", targetClass = "", chosenPlayer = "" },
@@ -271,6 +294,25 @@ local function Print(message)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff73d0ffUnderheal:|r " .. message)
 end
 
+local function AddTooltip(widget, title, text)
+	if not widget then
+		return widget
+	end
+
+	widget:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(title or "Underheal")
+		if text and text ~= "" then
+			GameTooltip:AddLine(text, 1, 1, 1, true)
+		end
+		GameTooltip:Show()
+	end)
+	widget:SetScript("OnLeave", function()
+		GameTooltip:Hide()
+	end)
+	return widget
+end
+
 local function CopyTable(source)
 	if type(source) ~= "table" then
 		return source
@@ -302,6 +344,7 @@ local function EnsureDefaults()
 	UnderhealDB.targetOfTarget = UnderhealDB.targetOfTarget or {}
 	UnderhealDB.clickBuffButton = UnderhealDB.clickBuffButton or {}
 	UnderhealDB.selfWatch = UnderhealDB.selfWatch or {}
+	UnderhealDB.resourceStats = UnderhealDB.resourceStats or {}
 	UnderhealDB.powerInfusion = UnderhealDB.powerInfusion or {}
 	UnderhealDB.buffButtons = UnderhealDB.buffButtons or {}
 	UnderhealDB.clickCasts = UnderhealDB.clickCasts or {}
@@ -310,6 +353,9 @@ local function EnsureDefaults()
 		if UnderhealDB.raidFrame[key] == nil then
 			UnderhealDB.raidFrame[key] = value
 		end
+	end
+	if UnderhealDB.raidFrame.showTargetOfTarget and not UnderhealDB.raidFrame.targetOfTargetOptIn then
+		UnderhealDB.raidFrame.showTargetOfTarget = false
 	end
 
 	for key, value in pairs(defaults.pets) do
@@ -339,6 +385,12 @@ local function EnsureDefaults()
 	for key, value in pairs(defaults.selfWatch) do
 		if UnderhealDB.selfWatch[key] == nil then
 			UnderhealDB.selfWatch[key] = value
+		end
+	end
+
+	for key, value in pairs(defaults.resourceStats) do
+		if UnderhealDB.resourceStats[key] == nil then
+			UnderhealDB.resourceStats[key] = value
 		end
 	end
 
@@ -784,6 +836,23 @@ local function FindGroupUnitByName(name)
 	return nil
 end
 
+local function IsPlayerName(name)
+	local shortName = GetShortName(name)
+	return shortName and shortName == GetShortName(UnitName("player"))
+end
+
+local function IsAllowedCastFallbackUnit(unit, targetName)
+	if not unit or not UnitExists(unit) or not UnitCanAssist("player", unit) then
+		return false
+	end
+
+	if UnitIsUnit and UnitIsUnit(unit, "player") and not IsPlayerName(targetName) then
+		return false
+	end
+
+	return true
+end
+
 local function FindGroupUnitByGUID(guid)
 	if not guid then
 		return nil
@@ -855,6 +924,130 @@ local function GetHealthColor(healthPercent)
 	end
 
 	return 1.0, 0.0, 0.0
+end
+
+local cachedRangeCheckSpell
+local function ClearRangeCheckSpellCache()
+	cachedRangeCheckSpell = nil
+end
+
+local function GetRangeCheckSpell()
+	if cachedRangeCheckSpell ~= nil then
+		return cachedRangeCheckSpell ~= false and cachedRangeCheckSpell or nil
+	end
+
+	if not UnderhealDB or not UnderhealDB.clickCasts then
+		cachedRangeCheckSpell = false
+		return nil
+	end
+
+	for _, modifier in ipairs({ "none", "ctrl", "shift", "alt" }) do
+		local config = UnderhealDB.clickCasts[modifier]
+		if config then
+			if config.left and config.left ~= "" and IsHealingSpell(config.left) then
+				cachedRangeCheckSpell = config.left
+				return config.left
+			end
+			if config.right and config.right ~= "" and IsHealingSpell(config.right) then
+				cachedRangeCheckSpell = config.right
+				return config.right
+			end
+		end
+	end
+
+	cachedRangeCheckSpell = false
+	return nil
+end
+
+local function UnitIsDefinitelyOutOfHealRange(unit)
+	if not unit or not UnitExists(unit) or not UnitCanAssist("player", unit) then
+		return false
+	end
+
+	if UnitIsUnit and UnitIsUnit(unit, "player") then
+		return false
+	end
+
+	local rangeSpell = GetRangeCheckSpell()
+	if rangeSpell and IsSpellInRange then
+		local inRange = IsSpellInRange(rangeSpell, unit)
+		if inRange == 1 or inRange == true then
+			return false
+		elseif inRange == 0 or inRange == false then
+			return true
+		end
+	end
+
+	if UnitInRange then
+		local inRange, checked = UnitInRange(unit)
+		if checked and inRange == false then
+			return true
+		elseif checked and inRange == true then
+			return false
+		elseif inRange == false then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function GetUnitRangeText(unit)
+	if not unit or not UnitExists(unit) then
+		return "Range: unknown"
+	end
+
+	if UnitIsUnit and UnitIsUnit(unit, "player") then
+		return "Range: 0 yd"
+	end
+
+	if CheckInteractDistance then
+		if CheckInteractDistance(unit, 3) then
+			return "Range: <=10 yd"
+		elseif CheckInteractDistance(unit, 2) then
+			return "Range: <=11 yd"
+		elseif CheckInteractDistance(unit, 1) or CheckInteractDistance(unit, 4) then
+			return "Range: <=28 yd"
+		end
+	end
+
+	local rangeSpell = GetRangeCheckSpell()
+	if rangeSpell and IsSpellInRange then
+		local inRange = IsSpellInRange(rangeSpell, unit)
+		if inRange == 1 or inRange == true then
+			return "Range: <=40 yd"
+		elseif inRange == 0 or inRange == false then
+			return "Range: >40 yd"
+		end
+	end
+
+	if UnitInRange then
+		local inRange, checked = UnitInRange(unit)
+		if checked and inRange == true then
+			return "Range: <=40 yd"
+		elseif checked and inRange == false then
+			return "Range: >40 yd"
+		end
+	end
+
+	return "Range: unknown"
+end
+
+local function FormatDuration(seconds)
+	seconds = tonumber(seconds)
+	if not seconds or seconds <= 0 then
+		return "-"
+	end
+
+	if seconds > 5999 then
+		return "long"
+	end
+
+	if seconds >= 60 then
+		return string.format("%dm %02ds", math.floor(seconds / 60), math.floor(seconds % 60))
+	end
+
+	return string.format("%ds", math.floor(seconds + 0.5))
 end
 
 local function GetThreatTargetUnit()
@@ -970,6 +1163,35 @@ local function UnitHasConfiguredAura(unit, config)
 		end
 	end
 
+	return false
+end
+
+local function ConfigTracksAuraName(config, auraName)
+	if not config or not auraName then
+		return false
+	end
+
+	local function Matches(configuredNames)
+		if not configuredNames or configuredNames == "" then
+			return false
+		end
+
+		for namePart in string.gmatch(configuredNames, "([^,;]+)") do
+			if string.gsub(namePart, "^%s*(.-)%s*$", "%1") == auraName then
+				return true
+			end
+		end
+		return false
+	end
+
+	if Matches(config.aura) or Matches(config.cast) then
+		return true
+	end
+	for _, alias in ipairs(config.auraAliases or {}) do
+		if Matches(alias) then
+			return true
+		end
+	end
 	return false
 end
 
@@ -1133,13 +1355,16 @@ function Underheal:ApplyGroupGap()
 end
 
 function Underheal:GetRaidMemberFrames()
-	local now = GetTime and GetTime() or 0
-	if self.raidMemberFrameCache and not self.raidMemberFrameCacheDirty and self.raidMemberFrameCacheTime and (now - self.raidMemberFrameCacheTime) < 0.1 then
+	if self.raidMemberFrameCache and not self.raidMemberFrameCacheDirty then
 		return self.raidMemberFrameCache
 	end
 
-	local frames = {}
-	local seen = {}
+	self.raidMemberFrameCache = self.raidMemberFrameCache or {}
+	self.raidMemberFrameSeenScratch = self.raidMemberFrameSeenScratch or {}
+	local frames = self.raidMemberFrameCache
+	local seen = self.raidMemberFrameSeenScratch
+	ClearTable(frames)
+	ClearTable(seen)
 
 	local function AddFrame(frame, unitOverride)
 		if not frame or seen[frame] or not frame:IsShown() then
@@ -1201,8 +1426,6 @@ function Underheal:GetRaidMemberFrames()
 		end
 	end
 
-	self.raidMemberFrameCache = frames
-	self.raidMemberFrameCacheTime = now
 	self.raidMemberFrameCacheDirty = nil
 	return frames
 end
@@ -1484,7 +1707,7 @@ function Underheal:GetBestMissingBuffConfig(unit, raidIndex)
 end
 
 function Underheal:GetClickBuffConfig(unit, raidIndex)
-	if not UnderhealDB.raidFrame.clickToBuff then
+	if not UnderhealDB.raidFrame.clickToBuff or not UnderhealDB.raidFrame.showBuffColors then
 		return nil
 	end
 	if GetUnitSpecialState(unit) then
@@ -1500,7 +1723,7 @@ function Underheal:GetClickBuffConfig(unit, raidIndex)
 end
 
 function Underheal:GetCombatClickBuffConfig(unit, raidIndex)
-	if not UnderhealDB.raidFrame.clickToBuff or GetUnitSpecialState(unit) then
+	if not UnderhealDB.raidFrame.clickToBuff or not UnderhealDB.raidFrame.showBuffColors or GetUnitSpecialState(unit) then
 		return nil
 	end
 
@@ -1519,7 +1742,7 @@ function Underheal:BuildClickCastMacro(unit, spell, useTrinkets)
 		lines[#lines + 1] = "/use 13"
 		lines[#lines + 1] = "/use 14"
 	end
-	lines[#lines + 1] = "/cast [@" .. unit .. "] " .. spell
+	lines[#lines + 1] = "/cast [@" .. unit .. ",help,nodead] " .. spell
 	return table.concat(lines, "\n")
 end
 
@@ -1528,7 +1751,8 @@ function Underheal:AddBuffCastLines(lines, condition, unit, config)
 		return
 	end
 
-	local macroCondition = condition and condition ~= "" and condition .. ",@" .. unit or "@" .. unit
+	local unitCondition = "@" .. unit .. ",help,nodead"
+	local macroCondition = condition and condition ~= "" and condition .. "," .. unitCondition or unitCondition
 	local spell = config.cast
 	if config.reagent and config.reagent ~= "" and config.fallbackCast and config.fallbackCast ~= "" and GetItemCount and GetItemCount(config.reagent) < 1 then
 		spell = config.fallbackCast
@@ -1543,7 +1767,7 @@ function Underheal:BuildDirectBuffMacro(unit, config)
 		spell = config and config.cast
 	end
 	if spell and spell ~= "" then
-		lines[#lines + 1] = "/cast [@" .. unit .. "] " .. spell
+		lines[#lines + 1] = "/cast [@" .. unit .. ",help,nodead] " .. spell
 	end
 	return table.concat(lines, "\n")
 end
@@ -1558,10 +1782,10 @@ function Underheal:BuildClickBuffMacro(unit, buffConfig, combatBuffConfig)
 		if buffConfig and buffConfig.cast and buffConfig.cast ~= "" then
 			self:AddBuffCastLines(lines, "nocombat", unit, buffConfig)
 		elseif fallbackSpell ~= "" then
-			lines[#lines + 1] = "/cast [nocombat,@" .. unit .. "] " .. fallbackSpell
+			lines[#lines + 1] = "/cast [nocombat,@" .. unit .. ",help,nodead] " .. fallbackSpell
 		end
 		if fallbackSpell ~= "" then
-			lines[#lines + 1] = "/cast [combat,@" .. unit .. "] " .. fallbackSpell
+			lines[#lines + 1] = "/cast [combat,@" .. unit .. ",help,nodead] " .. fallbackSpell
 		end
 		return table.concat(lines, "\n")
 	end
@@ -1573,7 +1797,7 @@ function Underheal:BuildClickBuffMacro(unit, buffConfig, combatBuffConfig)
 
 	if fallbackSpell ~= "" then
 		self:AddBuffCastLines(lines, "nocombat", unit, buffConfig)
-		lines[#lines + 1] = "/cast [@" .. unit .. "] " .. fallbackSpell
+		lines[#lines + 1] = "/cast [@" .. unit .. ",help,nodead] " .. fallbackSpell
 	elseif buffConfig then
 		self:AddBuffCastLines(lines, "nocombat", unit, buffConfig)
 	end
@@ -1590,11 +1814,11 @@ function Underheal:BuildDeadUnitMacro(unit, fallbackSpell, useTrinkets)
 	end
 
 	if resSpell and fallbackSpell and fallbackSpell ~= "" then
-		lines[#lines + 1] = "/cast [nocombat,@" .. unit .. ",dead] " .. resSpell .. "; [@" .. unit .. "] " .. fallbackSpell
+		lines[#lines + 1] = "/cast [nocombat,@" .. unit .. ",dead] " .. resSpell .. "; [@" .. unit .. ",help,nodead] " .. fallbackSpell
 	elseif resSpell then
 		lines[#lines + 1] = "/cast [nocombat,@" .. unit .. ",dead] " .. resSpell
 	elseif fallbackSpell and fallbackSpell ~= "" then
-		lines[#lines + 1] = "/cast [@" .. unit .. "] " .. fallbackSpell
+		lines[#lines + 1] = "/cast [@" .. unit .. ",help,nodead] " .. fallbackSpell
 	end
 
 	return table.concat(lines, "\n")
@@ -1606,20 +1830,6 @@ function Underheal:CaptureCastTarget(unit, fallbackName)
 	self.pendingCastTargetGUID = unit and UnitExists(unit) and UnitGUID(unit) or nil
 end
 
-function Underheal:MaybeCancelCastForNewTarget(unit)
-	if not UnderhealDB.raidFrame.superResponsiveMode or not unit or not UnitExists(unit) then
-		return
-	end
-	if not UnitCastingInfo("player") and not (UnitChannelInfo and UnitChannelInfo("player")) then
-		return
-	end
-
-	local clickedGUID = UnitGUID(unit)
-	if clickedGUID and self.outgoingHealTargetGUID and clickedGUID ~= self.outgoingHealTargetGUID and SpellStopCasting then
-		SpellStopCasting()
-	end
-end
-
 function Underheal:HookCastTargetCapture(button)
 	if not button or button.UnderhealCastTargetCaptureHooked then
 		return
@@ -1628,7 +1838,6 @@ function Underheal:HookCastTargetCapture(button)
 	button:HookScript("PreClick", function(self)
 		local unit = self:GetAttribute("unit") or self:GetAttribute("unit1")
 		if unit and UnitExists(unit) then
-			Underheal:MaybeCancelCastForNewTarget(unit)
 			Underheal:CaptureCastTarget(unit)
 		end
 	end)
@@ -1678,11 +1887,14 @@ function Underheal:SetClickCastAttributes(button, unit)
 				button:SetAttribute(prefix .. "unit1", nil)
 			elseif useTrinkets then
 				button:SetAttribute(prefix .. "type1", "macro")
-				button:SetAttribute(prefix .. "macrotext1", self:BuildClickCastMacro(unit, leftSpell, true))
+				button:SetAttribute(prefix .. "macrotext1", self:BuildClickCastMacro(unit, leftSpell, useTrinkets))
+				button:SetAttribute(prefix .. "spell1", nil)
+				button:SetAttribute(prefix .. "unit1", nil)
 			else
 				button:SetAttribute(prefix .. "type1", "spell")
 				button:SetAttribute(prefix .. "spell1", leftSpell)
 				button:SetAttribute(prefix .. "unit1", unit)
+				button:SetAttribute(prefix .. "macrotext1", nil)
 			end
 		else
 			button:SetAttribute(prefix .. "type1", nil)
@@ -1694,11 +1906,14 @@ function Underheal:SetClickCastAttributes(button, unit)
 		if rightSpell and rightSpell ~= "" then
 			if useTrinkets then
 				button:SetAttribute(prefix .. "type2", "macro")
-				button:SetAttribute(prefix .. "macrotext2", self:BuildClickCastMacro(unit, rightSpell, true))
+				button:SetAttribute(prefix .. "macrotext2", self:BuildClickCastMacro(unit, rightSpell, useTrinkets))
+				button:SetAttribute(prefix .. "spell2", nil)
+				button:SetAttribute(prefix .. "unit2", nil)
 			else
 				button:SetAttribute(prefix .. "type2", "spell")
 				button:SetAttribute(prefix .. "spell2", rightSpell)
 				button:SetAttribute(prefix .. "unit2", unit)
+				button:SetAttribute(prefix .. "macrotext2", nil)
 			end
 		else
 			button:SetAttribute(prefix .. "type2", nil)
@@ -1715,9 +1930,9 @@ function Underheal:GetRaidBuffButton(frame, index)
 		return frame.UnderhealBuffButtons[index]
 	end
 
-	local button = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
+	local button = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
 	button:SetSize(14, 14)
-	button:RegisterForClicks("AnyUp")
+	button:RegisterForClicks("AnyDown")
 	self:HookCastTargetCapture(button)
 	button:SetScript("OnEnter", function(self)
 		if not self.UnderhealBuffConfig then
@@ -1770,9 +1985,9 @@ function Underheal:GetPowerInfusionButton(frame)
 		return frame.UnderhealPIButton
 	end
 
-	local button = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
+	local button = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
 	button:SetSize(24, 18)
-	button:RegisterForClicks("AnyUp")
+	button:RegisterForClicks("AnyDown")
 	self:HookCastTargetCapture(button)
 	button:SetFrameLevel(frame:GetFrameLevel() + 9)
 
@@ -1851,7 +2066,7 @@ function Underheal:RefreshPowerInfusionVisuals()
 	if self.selfWatch and self.selfWatch:IsShown() then
 		active = self:UpdatePowerInfusionVisual(self.selfWatch, "player") or active
 	end
-	if self.targetOfTargetWatch and self.targetOfTargetWatch.button and self.targetOfTargetWatch:IsShown() then
+	if UnderhealDB.raidFrame.showTargetOfTarget and self.targetOfTargetWatch and self.targetOfTargetWatch.button and self.targetOfTargetWatch:IsShown() then
 		active = self:UpdatePowerInfusionVisual(self.targetOfTargetWatch.button, "targettarget") or active
 	end
 
@@ -1891,18 +2106,18 @@ function Underheal:GetRaidClickBuffButton(frame)
 		return frame.UnderhealClickBuffButton
 	end
 
-	local button = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
+	local button = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
 	button:SetAllPoints(frame)
-	button:RegisterForClicks("AnyUp")
+	button:RegisterForClicks("AnyDown")
 	button:SetFrameLevel(frame:GetFrameLevel() + 8)
 	button:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		if self.UnderhealBuffConfig then
-			GameTooltip:SetText(self.UnderhealBuffConfig.cast or "Buff")
-			GameTooltip:AddLine("Left click will buff this player.", 1, 1, 1)
+		local unit = self:GetAttribute("unit") or self:GetAttribute("unit1")
+		if unit and UnitExists(unit) then
+			GameTooltip:SetText(UnitName(unit) or "Unit")
+			GameTooltip:AddLine(GetUnitRangeText(unit), 1, 1, 1)
 		else
-			GameTooltip:SetText("Underheal click-cast")
-			GameTooltip:AddLine("Use configured clicks on this player.", 1, 1, 1)
+			GameTooltip:SetText("Range: unknown")
 		end
 		GameTooltip:Show()
 	end)
@@ -2017,6 +2232,8 @@ function Underheal:ApplyBuffButtonsToFrame(frame)
 		clickButton:SetAttribute("spell1", nil)
 		clickButton:SetAttribute("unit1", nil)
 		clickButton:SetAttribute("macrotext1", self:BuildClickBuffMacro(unit, clickConfig, combatClickConfig))
+	elseif not InCombatLockdown() then
+		self:SetClickCastAttributes(clickButton, unit)
 	end
 	clickButton:Show()
 
@@ -2051,12 +2268,13 @@ function Underheal:ApplyBuffButtonsToFrame(frame)
 			button.UnderhealBuffConfig = config
 
 			if not InCombatLockdown() then
+				local macroText = self:BuildDirectBuffMacro(unit, config)
 				button:SetAttribute("type", "macro")
 				button:SetAttribute("type1", "macro")
 				button:SetAttribute("spell", nil)
 				button:SetAttribute("spell1", nil)
-				button:SetAttribute("macrotext", self:BuildDirectBuffMacro(unit, config))
-				button:SetAttribute("macrotext1", self:BuildDirectBuffMacro(unit, config))
+				button:SetAttribute("macrotext", macroText)
+				button:SetAttribute("macrotext1", macroText)
 				button:SetAttribute("unit", unit)
 			end
 
@@ -2078,7 +2296,7 @@ function Underheal:ApplyBuffButtons()
 	if self.selfWatch and self.selfWatch:IsShown() then
 		self:ApplyBuffButtonsToFrame(self.selfWatch)
 	end
-	if self.targetOfTargetWatch and self.targetOfTargetWatch.button and self.targetOfTargetWatch:IsShown() then
+	if UnderhealDB.raidFrame.showTargetOfTarget and self.targetOfTargetWatch and self.targetOfTargetWatch.button and self.targetOfTargetWatch:IsShown() then
 		self:ApplyBuffButtonsToFrame(self.targetOfTargetWatch.button)
 	end
 
@@ -2579,6 +2797,54 @@ function Underheal:UpdateIncomingHealFrame(frame, unit)
 	frame.UnderhealIncomingText:Show()
 end
 
+function Underheal:RefreshIncomingHealsForUnit(unit)
+	if not unit or not UnitExists(unit) then
+		return
+	end
+
+	if unit == "player" and self.selfWatch and self.selfWatch:IsShown() then
+		self:UpdateIncomingHealFrame(self.selfWatch, "player")
+	end
+
+	local frames = self.raidMemberFrameCache
+	if not frames or self.raidMemberFrameCacheDirty then
+		frames = self:GetRaidMemberFrames()
+	end
+	for _, info in ipairs(frames or {}) do
+		local frame = info.frame
+		local frameUnit = info.unit or (frame and (frame.unit or frame.displayedUnit or (frame.GetAttribute and frame:GetAttribute("unit"))))
+		if frame and frameUnit and UnitIsUnit and UnitIsUnit(frameUnit, unit) then
+			self:UpdateIncomingHealFrame(frame, frameUnit)
+		end
+	end
+
+	if self.tankWatch and self.tankWatch.buttons then
+		for _, button in ipairs(self.tankWatch.buttons) do
+			local buttonUnit = button:IsShown() and button:GetAttribute("unit")
+			if buttonUnit and UnitIsUnit and UnitIsUnit(buttonUnit, unit) then
+				self:UpdateIncomingHealFrame(button, buttonUnit)
+			end
+		end
+	end
+
+	if self.targetOfTargetWatch and self.targetOfTargetWatch.button and self.targetOfTargetWatch:IsShown() then
+		local button = self.targetOfTargetWatch.button
+		local buttonUnit = button:GetAttribute("unit")
+		if buttonUnit and UnitIsUnit and UnitIsUnit(buttonUnit, unit) then
+			self:UpdateIncomingHealFrame(button, buttonUnit)
+		end
+	end
+
+	if self.petWatch and self.petWatch.buttons then
+		for _, button in ipairs(self.petWatch.buttons) do
+			local buttonUnit = button:IsShown() and button:GetAttribute("unit")
+			if buttonUnit and UnitIsUnit and UnitIsUnit(buttonUnit, unit) then
+				self:UpdateIncomingHealFrame(button, buttonUnit)
+			end
+		end
+	end
+end
+
 function Underheal:RefreshIncomingHeals()
 	if self.selfWatch and self.selfWatch:IsShown() then
 		self:UpdateIncomingHealFrame(self.selfWatch, "player")
@@ -2699,7 +2965,9 @@ function Underheal:UpdateThreatIndicators()
 	end
 
 	local raidFrames = self:GetRaidMemberFrames()
-	local frames = {}
+	self.threatFramesScratch = self.threatFramesScratch or {}
+	local frames = self.threatFramesScratch
+	ClearTable(frames)
 	for index, info in ipairs(raidFrames) do
 		frames[index] = info
 	end
@@ -2746,7 +3014,9 @@ function Underheal:UpdateThreatIndicators()
 		end
 	end
 
-	local entries = {}
+	self.threatEntriesScratch = self.threatEntriesScratch or {}
+	local entries = self.threatEntriesScratch
+	ClearTable(entries)
 	local maxThreat = 0
 	local hasDiscreteMembers = self:HasDiscreteGroupMembers()
 
@@ -2782,7 +3052,9 @@ function Underheal:UpdateThreatIndicators()
 		return a.value > b.value
 	end)
 
-	local topFrames = {}
+	self.threatTopFramesScratch = self.threatTopFramesScratch or {}
+	local topFrames = self.threatTopFramesScratch
+	ClearTable(topFrames)
 	for rank = 1, math.min(5, #entries) do
 		topFrames[entries[rank].frame] = true
 	end
@@ -2937,6 +3209,11 @@ function Underheal:SkinRaidMemberFrame(frame, healthOnly)
 			elseif specialState == "MINDCONTROLLED" then
 				r, g, b = 0.72, 0.05, 0.78
 			end
+			local outOfHealRange = unit and UnitExists(unit) and not specialState and UnitIsDefinitelyOutOfHealRange(unit)
+			if outOfHealRange then
+				r, g, b = 0.42, 0.42, 0.42
+			end
+			frame.UnderhealOutOfHealRange = not not outOfHealRange
 			if healthBar.SetStatusBarColor then
 				healthBar:SetStatusBarColor(r, g, b, 0.95)
 			end
@@ -2989,16 +3266,6 @@ function Underheal:SkinRaidFrames()
 	self:HideClassicPartyFrameOverlays()
 	self:UpdateSelfWatch()
 
-	for group = 1, 8 do
-		for member = 1, 5 do
-			self:SkinRaidMemberFrame(_G["CompactRaidGroup" .. group .. "Member" .. member])
-		end
-	end
-
-	for index = 1, 40 do
-		self:SkinRaidMemberFrame(_G["CompactRaidFrame" .. index])
-	end
-
 	local frames = self:GetRaidMemberFrames()
 	for _, info in ipairs(frames) do
 		self:SkinRaidMemberFrame(info.frame)
@@ -3037,7 +3304,7 @@ function Underheal:GetSelfWatchFrame()
 	frame:SetClampedToScreen(true)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
-	frame:RegisterForClicks("AnyUp")
+	frame:RegisterForClicks("AnyDown")
 	frame:SetAttribute("unit", "player")
 
 	local bg = frame:CreateTexture(nil, "BACKGROUND")
@@ -3070,6 +3337,25 @@ function Underheal:GetSelfWatchFrame()
 	manaText:SetJustifyH("RIGHT")
 	manaText:SetTextColor(0.55, 0.75, 1.0, 1)
 	frame.manaText = manaText
+
+	frame.auraIcons = {}
+	for index = 1, 8 do
+		local auraIcon = CreateFrame("Frame", nil, frame)
+		auraIcon:SetSize(16, 16)
+		auraIcon:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 6 + ((index - 1) * 18), 4)
+		auraIcon:SetFrameLevel(healthBar:GetFrameLevel() + 3)
+
+		local texture = auraIcon:CreateTexture(nil, "ARTWORK")
+		texture:SetAllPoints()
+		auraIcon.texture = texture
+
+		local count = auraIcon:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+		count:SetPoint("BOTTOMRIGHT", 1, -1)
+		auraIcon.count = count
+
+		auraIcon:Hide()
+		frame.auraIcons[index] = auraIcon
+	end
 
 	local dragHandle = CreateFrame("Frame", nil, frame, BackdropTemplateMixin and "BackdropTemplate")
 	dragHandle:SetSize(430, 26)
@@ -3197,13 +3483,54 @@ function Underheal:PositionSelfWatchFrame()
 	frame:ClearAllPoints()
 	if UnderhealDB.selfWatch.hasPosition then
 		local x, y = self:GetClampedSelfWatchPosition(width, height, UnderhealDB.selfWatch.x, UnderhealDB.selfWatch.y)
-		UnderhealDB.selfWatch.x = x
-		UnderhealDB.selfWatch.y = y
 		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
 	else
 		frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 	end
 	return true
+end
+
+function Underheal:UpdateSelfWatchAuras(frame)
+	if not frame or not frame.auraIcons then
+		return
+	end
+
+	local auras = {}
+	for auraIndex = 1, 40 do
+		local name, icon, count = UnitBuff("player", auraIndex)
+		if not name then
+			break
+		end
+
+		local priority = name == "Renew" and 1 or 3
+		if priority > 1 then
+			for _, config in ipairs(UnderhealDB.buffButtons or {}) do
+				if config.enabled and ConfigTracksAuraName(config, name) then
+					priority = 2
+					break
+				end
+			end
+		end
+		auras[#auras + 1] = { icon = icon, count = count, priority = priority, index = auraIndex }
+	end
+
+	table.sort(auras, function(left, right)
+		if left.priority ~= right.priority then
+			return left.priority < right.priority
+		end
+		return left.index < right.index
+	end)
+
+	for index, auraIcon in ipairs(frame.auraIcons) do
+		local aura = auras[index]
+		if aura and aura.icon then
+			auraIcon.texture:SetTexture(aura.icon)
+			auraIcon.count:SetText(aura.count and aura.count > 1 and aura.count or "")
+			auraIcon:Show()
+		else
+			auraIcon:Hide()
+		end
+	end
 end
 
 function Underheal:UpdateSelfWatch()
@@ -3239,6 +3566,7 @@ function Underheal:UpdateSelfWatch()
 		frame.healthBar:SetMinMaxValues(0, math.max(1, UnitHealthMax("player") or 1))
 		frame.healthBar:SetValue(UnitHealth("player") or 0)
 	end
+	self:UpdateSelfWatchAuras(frame)
 
 	self:SkinRaidMemberFrame(frame)
 	if not InCombatLockdown() then
@@ -3314,7 +3642,7 @@ function Underheal:GetPetButton(index)
 
 	local button = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
 	button:SetSize(104, 24)
-	button:RegisterForClicks("AnyUp")
+	button:RegisterForClicks("AnyDown")
 	button:SetAttribute("type1", "target")
 
 	local bg = button:CreateTexture(nil, "BACKGROUND")
@@ -3581,7 +3909,7 @@ function Underheal:GetTankButton(index)
 
 	local button = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
 	button:SetSize(TANK_BUTTON_WIDTH, 24)
-	button:RegisterForClicks("AnyUp")
+	button:RegisterForClicks("AnyDown")
 	button:SetAttribute("type1", "target")
 
 	local bg = button:CreateTexture(nil, "BACKGROUND")
@@ -3661,12 +3989,17 @@ function Underheal:UpdateTankButtonVisual(button, unit)
 	elseif specialState == "MINDCONTROLLED" then
 		r, g, b = 0.72, 0.05, 0.78
 	end
+	local outOfHealRange = not specialState and UnitIsDefinitelyOutOfHealRange(unit)
+	if outOfHealRange then
+		r, g, b = 0.42, 0.42, 0.42
+	end
 
 	button.health:SetWidth(math.max(1, TANK_BUTTON_WIDTH * (specialState == "RIP" and 1 or healthPercent)))
 	button.health:SetColorTexture(r, g, b, 0.95)
 	button.health:SetAlpha(1)
 	button.UnderhealSyncedHealth = healthCurrent or 0
 	button.UnderhealSyncedHealthMax = math.max(1, healthMax or 1)
+	button.UnderhealOutOfHealRange = not not outOfHealRange
 	button.bg:SetColorTexture(0.02, 0.08, 0.03, 0.88)
 	button.flashHealth = healthPercent < 0.1 and not specialState
 	button.flashElapsed = button.flashHealth and (button.flashElapsed or 0) or 0
@@ -3971,7 +4304,7 @@ function Underheal:GetTargetOfTargetButton()
 
 	local button = CreateFrame("Button", nil, frame, "SecureUnitButtonTemplate")
 	button:SetSize(TANK_BUTTON_WIDTH, 24)
-	button:RegisterForClicks("AnyUp")
+	button:RegisterForClicks("AnyDown")
 	button:SetAttribute("unit", "targettarget")
 	button:SetAttribute("type1", "target")
 	button:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -28)
@@ -4102,6 +4435,20 @@ function Underheal:ClearTargetOfTargetButton()
 end
 
 function Underheal:UpdateTargetOfTargetWatch()
+	if not UnderhealDB.raidFrame.showTargetOfTarget then
+		if self.targetOfTargetWatch then
+			self:ClearTargetOfTargetButton()
+			if self.targetOfTargetWatch.button and not InCombatLockdown() then
+				self.targetOfTargetWatch.button:Hide()
+				self.targetOfTargetWatch.button:SetAttribute("unit", nil)
+			end
+			if not InCombatLockdown() then
+				self.targetOfTargetWatch:Hide()
+			end
+		end
+		return
+	end
+
 	if InCombatLockdown() and not self.targetOfTargetWatch then
 		self.pendingTargetOfTargetUpdate = true
 		return
@@ -4111,13 +4458,6 @@ function Underheal:UpdateTargetOfTargetWatch()
 	local button = self:GetTargetOfTargetButton()
 	self:PositionTargetOfTargetFrame()
 	self:UpdateTargetOfTargetDragState()
-
-	if not UnderhealDB.raidFrame.showTargetOfTarget then
-		if not InCombatLockdown() then
-			frame:Hide()
-		end
-		return
-	end
 
 	if not UnitExists("targettarget") or not UnitCanAssist("player", "targettarget") then
 		self:ClearTargetOfTargetButton()
@@ -4153,6 +4493,7 @@ function Underheal:PollTargetOfTarget(elapsed)
 	if self.targetOfTargetPollElapsed < 0.1 then
 		return
 	end
+	local pollElapsed = self.targetOfTargetPollElapsed
 	self.targetOfTargetPollElapsed = 0
 
 	if self.disabledForNonHealer or not UnderhealDB.raidFrame or not UnderhealDB.raidFrame.showTargetOfTarget then
@@ -4162,17 +4503,26 @@ function Underheal:PollTargetOfTarget(elapsed)
 	local guid = UnitGUID("targettarget")
 	local health = UnitHealth("targettarget") or 0
 	local healthMax = UnitHealthMax("targettarget") or 0
-	if guid ~= self.lastTargetOfTargetGUID or health ~= self.lastTargetOfTargetHealth or healthMax ~= self.lastTargetOfTargetHealthMax then
+	self.targetOfTargetRangePollElapsed = (self.targetOfTargetRangePollElapsed or 0) + pollElapsed
+	local checkRange = self.targetOfTargetRangePollElapsed >= 0.6
+	local outOfHealRange = self.lastTargetOfTargetOutOfHealRange
+	if checkRange or outOfHealRange == nil or guid ~= self.lastTargetOfTargetGUID then
+		self.targetOfTargetRangePollElapsed = 0
+		outOfHealRange = UnitIsDefinitelyOutOfHealRange("targettarget")
+	end
+	if guid ~= self.lastTargetOfTargetGUID or health ~= self.lastTargetOfTargetHealth or healthMax ~= self.lastTargetOfTargetHealthMax or outOfHealRange ~= self.lastTargetOfTargetOutOfHealRange then
 		self.lastTargetOfTargetGUID = guid
 		self.lastTargetOfTargetHealth = health
 		self.lastTargetOfTargetHealthMax = healthMax
+		self.lastTargetOfTargetOutOfHealRange = outOfHealRange
 		self:UpdateTargetOfTargetWatch()
 	end
 end
 
 function Underheal:PollBuffWarnings(elapsed)
 	self.buffWarningPollElapsed = (self.buffWarningPollElapsed or 0) + elapsed
-	if self.buffWarningPollElapsed < 1.0 then
+	local interval = InCombatLockdown() and 5.0 or 1.0
+	if self.buffWarningPollElapsed < interval then
 		return
 	end
 	self.buffWarningPollElapsed = 0
@@ -4180,14 +4530,22 @@ function Underheal:PollBuffWarnings(elapsed)
 	if self.disabledForNonHealer or not UnderhealDB.raidFrame or not UnderhealDB.raidFrame.showBuffColors then
 		return
 	end
+	if InCombatLockdown() then
+		return
+	end
 
-	self:QueueRefresh(true, not InCombatLockdown(), false, false, false, false)
+	self:QueueRefresh(true, true, false, false, false, false)
 end
 
 function Underheal:PollHealthBars(elapsed)
 	self.healthBarPollElapsed = (self.healthBarPollElapsed or 0) + elapsed
 	if self.healthBarPollElapsed < 0.2 then
 		return
+	end
+	self.rangeCheckPollElapsed = (self.rangeCheckPollElapsed or 0) + self.healthBarPollElapsed
+	local checkRange = self.rangeCheckPollElapsed >= 0.6
+	if checkRange then
+		self.rangeCheckPollElapsed = 0
 	end
 	self.healthBarPollElapsed = 0
 
@@ -4206,7 +4564,11 @@ function Underheal:PollHealthBars(elapsed)
 		if frame and frame:IsShown() and unit and UnitExists(unit) then
 			local health = UnitHealth(unit) or 0
 			local healthMax = math.max(1, UnitHealthMax(unit) or 1)
-			if frame.UnderhealSyncedHealth ~= health or frame.UnderhealSyncedHealthMax ~= healthMax then
+			local outOfHealRange = frame.UnderhealOutOfHealRange
+			if checkRange or outOfHealRange == nil then
+				outOfHealRange = UnitIsDefinitelyOutOfHealRange(unit)
+			end
+			if frame.UnderhealSyncedHealth ~= health or frame.UnderhealSyncedHealthMax ~= healthMax or frame.UnderhealOutOfHealRange ~= outOfHealRange then
 				self:SkinRaidMemberFrame(frame, true)
 			end
 		end
@@ -4226,7 +4588,11 @@ function Underheal:PollHealthBars(elapsed)
 			if button:IsShown() and unit and UnitExists(unit) then
 				local health = UnitHealth(unit) or 0
 				local healthMax = math.max(1, UnitHealthMax(unit) or 1)
-				if button.UnderhealSyncedHealth ~= health or button.UnderhealSyncedHealthMax ~= healthMax then
+				local outOfHealRange = button.UnderhealOutOfHealRange
+				if checkRange or outOfHealRange == nil then
+					outOfHealRange = UnitIsDefinitelyOutOfHealRange(unit)
+				end
+				if button.UnderhealSyncedHealth ~= health or button.UnderhealSyncedHealthMax ~= healthMax or button.UnderhealOutOfHealRange ~= outOfHealRange then
 					button.UnderhealSyncedHealth = health
 					button.UnderhealSyncedHealthMax = healthMax
 					self:UpdateTankButtonVisual(button, unit)
@@ -4252,7 +4618,7 @@ end
 
 function Underheal:PollThreatIndicators(elapsed)
 	self.threatPollElapsed = (self.threatPollElapsed or 0) + elapsed
-	if self.threatPollElapsed < 0.35 then
+	if self.threatPollElapsed < 0.75 then
 		return
 	end
 	self.threatPollElapsed = 0
@@ -4360,6 +4726,224 @@ function Underheal:UpdateClickBuffToggleButton()
 	button:SetText((UnderhealDB.raidFrame.showBuffColors and "Disable" or "Enable") .. " Buffs")
 	self:UpdateClickBuffToggleDragState()
 	button:Show()
+end
+
+function Underheal:GetResourceStatsFrame()
+	if self.resourceStatsFrame then
+		return self.resourceStatsFrame
+	end
+
+	local frame = CreateFrame("Frame", "UnderhealResourceStatsFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
+	frame:SetSize(245, 86)
+	frame:SetFrameStrata("MEDIUM")
+	frame:SetClampedToScreen(true)
+	frame:SetMovable(true)
+	frame:EnableMouse(true)
+	frame:RegisterForDrag("LeftButton")
+	if frame.SetBackdrop then
+		frame:SetBackdrop({
+			bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			tile = true,
+			tileSize = 16,
+			edgeSize = 12,
+			insets = { left = 3, right = 3, top = 3, bottom = 3 },
+		})
+		frame:SetBackdropColor(0.03, 0.05, 0.06, 0.86)
+		frame:SetBackdropBorderColor(0.35, 0.65, 0.75, 0.9)
+	end
+
+	local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	title:SetPoint("TOPLEFT", 8, -7)
+	title:SetText("Mana stats")
+	frame.title = title
+
+	local dragLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	dragLabel:SetPoint("TOPRIGHT", -8, -7)
+	dragLabel:SetText("drag")
+	dragLabel:SetTextColor(0.45, 1.0, 1.0)
+	dragLabel:Hide()
+	frame.dragLabel = dragLabel
+
+	local mpsText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	mpsText:SetPoint("TOPLEFT", 10, -28)
+	mpsText:SetJustifyH("LEFT")
+	mpsText:SetText("Mana per second used: -")
+	frame.mpsText = mpsText
+
+	local oomText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	oomText:SetPoint("TOPLEFT", 10, -47)
+	oomText:SetJustifyH("LEFT")
+	oomText:SetText("Time to OOM: -")
+	frame.oomText = oomText
+
+	local targetText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	targetText:SetPoint("TOPLEFT", 10, -66)
+	targetText:SetJustifyH("LEFT")
+	targetText:SetText("Time to target death: -")
+	frame.targetText = targetText
+
+	frame:SetScript("OnDragStart", function(self)
+		if UnderhealDB.raidFrame.unlocked and not InCombatLockdown() then
+			self.UnderhealMoving = true
+			self:StartMoving()
+		end
+	end)
+	frame:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		self.UnderhealMoving = nil
+		if self:GetLeft() and self:GetTop() then
+			UnderhealDB.resourceStats.x = self:GetLeft()
+			UnderhealDB.resourceStats.y = self:GetTop()
+			UnderhealDB.resourceStats.hasPosition = true
+		end
+		Underheal:PositionResourceStatsFrame()
+	end)
+
+	frame:Hide()
+	self.resourceStatsFrame = frame
+	return frame
+end
+
+function Underheal:PositionResourceStatsFrame()
+	local frame = self:GetResourceStatsFrame()
+	if frame.UnderhealMoving then
+		return
+	end
+
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", UnderhealDB.resourceStats.x, UnderhealDB.resourceStats.y)
+end
+
+function Underheal:UpdateResourceStatsDragState()
+	local frame = self.resourceStatsFrame
+	if not frame then
+		return
+	end
+
+	if UnderhealDB.raidFrame.unlocked then
+		if frame.dragLabel then
+			frame.dragLabel:Show()
+		end
+		if frame.SetBackdropBorderColor then
+			frame:SetBackdropBorderColor(0.95, 0.85, 0.25, 1)
+		end
+	else
+		if frame.dragLabel then
+			frame.dragLabel:Hide()
+		end
+		if frame.SetBackdropBorderColor then
+			frame:SetBackdropBorderColor(0.35, 0.65, 0.75, 0.9)
+		end
+	end
+end
+
+function Underheal:UpdateResourceStatsFrame()
+	local frame = self:GetResourceStatsFrame()
+	if frame.UnderhealMoving then
+		return
+	end
+
+	self:PositionResourceStatsFrame()
+	self:UpdateResourceStatsDragState()
+	if UnderhealDB.resourceStats.enabled and not self.disabledForNonHealer then
+		frame:Show()
+	else
+		frame:Hide()
+	end
+end
+
+function Underheal:ResetResourceStatsSamples()
+	self.manaSpendSamples = {}
+	self.targetDamageSamples = {}
+	self.lastResourceStatsMana = UnitPower("player", 0) or 0
+	self.lastResourceStatsTargetGUID = UnitGUID("target")
+	self.lastResourceStatsTargetHealth = UnitHealth("target") or 0
+end
+
+function Underheal:PruneTimedSamples(samples, now, windowSeconds)
+	local total = 0
+	local writeIndex = 1
+	for readIndex = 1, #samples do
+		local sample = samples[readIndex]
+		if sample and (now - sample.time) <= windowSeconds then
+			samples[writeIndex] = sample
+			total = total + (sample.value or 0)
+			writeIndex = writeIndex + 1
+		end
+	end
+	for index = writeIndex, #samples do
+		samples[index] = nil
+	end
+	return total
+end
+
+function Underheal:PollResourceStats(elapsed)
+	self.resourceStatsElapsed = (self.resourceStatsElapsed or 0) + elapsed
+	if self.resourceStatsElapsed < 1.0 then
+		return
+	end
+	self.resourceStatsElapsed = 0
+
+	if self.disabledForNonHealer or not UnderhealDB.resourceStats or not UnderhealDB.resourceStats.enabled then
+		if self.resourceStatsFrame then
+			self.resourceStatsFrame:Hide()
+		end
+		return
+	end
+
+	local frame = self:GetResourceStatsFrame()
+	self:UpdateResourceStatsFrame()
+
+	local now = GetTime and GetTime() or 0
+	local windowSeconds = 15
+	self.manaSpendSamples = self.manaSpendSamples or {}
+	self.targetDamageSamples = self.targetDamageSamples or {}
+
+	local mana = UnitPower("player", 0) or 0
+	local manaMax = UnitPowerMax("player", 0) or 0
+	if self.lastResourceStatsMana and mana < self.lastResourceStatsMana then
+		self.manaSpendSamples[#self.manaSpendSamples + 1] = { time = now, value = self.lastResourceStatsMana - mana }
+	end
+	self.lastResourceStatsMana = mana
+	local manaSpent = self:PruneTimedSamples(self.manaSpendSamples, now, windowSeconds)
+	local mps = manaSpent / windowSeconds
+	if manaMax <= 0 then
+		frame.mpsText:SetText("Mana per second used: -")
+		frame.oomText:SetText("Time to OOM: -")
+	elseif mps > 0.05 then
+		frame.mpsText:SetText(string.format("Mana per second used: %.1f", mps))
+		frame.oomText:SetText("Time to OOM: " .. FormatDuration(mana / mps))
+	else
+		frame.mpsText:SetText("Mana per second used: 0.0")
+		frame.oomText:SetText("Time to OOM: stable")
+	end
+
+	local targetLabel = "Time to target death: -"
+	if UnitExists("target") and UnitCanAttack("player", "target") and not (UnitIsDeadOrGhost and UnitIsDeadOrGhost("target")) then
+		local guid = UnitGUID("target")
+		local health = UnitHealth("target") or 0
+		if guid ~= self.lastResourceStatsTargetGUID then
+			self.targetDamageSamples = {}
+			self.lastResourceStatsTargetGUID = guid
+			self.lastResourceStatsTargetHealth = health
+		elseif self.lastResourceStatsTargetHealth and health < self.lastResourceStatsTargetHealth then
+			self.targetDamageSamples[#self.targetDamageSamples + 1] = { time = now, value = self.lastResourceStatsTargetHealth - health }
+		end
+		self.lastResourceStatsTargetHealth = health
+		local damageDone = self:PruneTimedSamples(self.targetDamageSamples, now, windowSeconds)
+		local dps = damageDone / windowSeconds
+		if dps > 0.05 then
+			targetLabel = "Time to target death: " .. FormatDuration(health / dps)
+		else
+			targetLabel = "Time to target death: calculating"
+		end
+	else
+		self.lastResourceStatsTargetGUID = UnitGUID("target")
+		self.lastResourceStatsTargetHealth = UnitHealth("target") or 0
+		self.targetDamageSamples = {}
+	end
+	frame.targetText:SetText(targetLabel)
 end
 
 function Underheal:DisableForNonHealer()
@@ -4609,7 +5193,9 @@ function Underheal:ProcessQueuedRefreshes(elapsed)
 
 	if self.queuedSkinRefresh then
 		self.queuedSkinRefresh = nil
-		self:SkinRaidFrames()
+		if not InCombatLockdown() then
+			self:SkinRaidFrames()
+		end
 	end
 
 	if self.queuedBuffRefresh then
@@ -4862,10 +5448,10 @@ function Underheal:HandleSpellcastSent(unit, first, second, third)
 	if not targetUnit and self.pendingCastTargetGUID and self.pendingCastTargetTime and (now - self.pendingCastTargetTime) <= 0.25 then
 		return
 	end
-	if not targetUnit and UnitExists("mouseover") and UnitCanAssist("player", "mouseover") then
+	if not targetUnit and IsAllowedCastFallbackUnit("mouseover", targetName) then
 		targetUnit = "mouseover"
 	end
-	if not targetUnit and UnitExists("target") and UnitCanAssist("player", "target") then
+	if not targetUnit and IsAllowedCastFallbackUnit("target", targetName) then
 		targetUnit = "target"
 	end
 	self:CaptureCastTarget(targetUnit, targetName)
@@ -4882,11 +5468,11 @@ function Underheal:HandleSpellcastStart(unit)
 	end
 
 	local targetUnit = FindGroupUnitByName(self.pendingHealTargetName)
-	if not targetUnit and UnitExists("target") and UnitCanAssist("player", "target") then
-		targetUnit = "target"
-	end
-	if not targetUnit and UnitExists("mouseover") and UnitCanAssist("player", "mouseover") then
+	if not targetUnit and IsAllowedCastFallbackUnit("mouseover", self.pendingHealTargetName) then
 		targetUnit = "mouseover"
+	end
+	if not targetUnit and IsAllowedCastFallbackUnit("target", self.pendingHealTargetName) then
+		targetUnit = "target"
 	end
 
 	self:SendHealStart(targetUnit, spellName)
@@ -5052,6 +5638,7 @@ function Underheal:ApplyRaidFrameScale()
 	self:UpdateTargetOfTargetWatch()
 	self:UpdateSelfWatch()
 	self:UpdatePetWatch()
+	self:UpdateResourceStatsFrame()
 	return true
 end
 
@@ -5103,13 +5690,20 @@ function Underheal:LoadRecommendedPreset(classFile)
 		UnderhealDB.buffButtons[index] = CopyTable(config)
 	end
 	UnderhealDB.clickCasts = CopyTable(defaults.clickCasts)
-	for key, config in pairs(preset.clickCasts or {}) do
+	local clickPreset = preset.clickCasts or {}
+	if (UnitLevel("player") or 0) >= 60 and preset.clickCasts60 then
+		clickPreset = preset.clickCasts60
+	end
+	for key, config in pairs(clickPreset) do
 		UnderhealDB.clickCasts[key] = CopyTable(config)
 	end
+	ClearRangeCheckSpellCache()
 	UnderhealDB.powerInfusion = CopyTable(preset.powerInfusion or defaults.powerInfusion)
 	for key, value in pairs(preset.raidFrame or {}) do
 		UnderhealDB.raidFrame[key] = value
 	end
+	UnderhealDB.raidFrame.showTargetOfTarget = false
+	UnderhealDB.raidFrame.targetOfTargetOptIn = false
 
 	self:SkinRaidFrames()
 	self:ApplyBuffButtons()
@@ -5117,39 +5711,7 @@ function Underheal:LoadRecommendedPreset(classFile)
 	self:UpdateTargetOfTargetWatch()
 	self:RefreshPowerInfusionVisuals()
 	self:RefreshOptions()
-	Print("Loaded recommended " .. string.lower(classFile) .. " settings.")
-end
-
-function Underheal:ImportLegacyProfile()
-	if InCombatLockdown() then
-		Print("Cannot import the legacy profile while in combat.")
-		return
-	end
-	if not UnderhealLegacyDB or not next(UnderhealLegacyDB) then
-		Print("No legacy account-wide profile was found.")
-		return
-	end
-
-	UnderhealCharacterDB = CopyTable(UnderhealLegacyDB)
-	UnderhealDB = UnderhealCharacterDB
-	EnsureDefaults()
-	if UnderhealDB.selfWatch.hasPosition then
-		UnderhealDB.selfWatch.setupConfirmed = true
-	end
-	self:ApplyGroupProfile()
-	self:ApplyRaidFrameScale()
-	self:ApplyRaidFramePosition()
-	self:ApplyGroupGap()
-	self:ApplyGroupMarkers()
-	self:SkinRaidFrames()
-	self:ApplyBuffButtons()
-	self:UpdateClickBuffToggleButton()
-	self:UpdateTankWatch()
-	self:UpdateTargetOfTargetWatch()
-	self:UpdatePetWatch()
-	self:RefreshPowerInfusionVisuals()
-	self:RefreshOptions()
-	Print("Imported the legacy account-wide settings for this character.")
+	Print("Loaded recommended " .. string.lower(classFile) .. " settings" .. (((UnitLevel("player") or 0) >= 60 and preset.clickCasts60) and " for level 60." or "."))
 end
 
 function Underheal:RefreshOptions()
@@ -5164,6 +5726,7 @@ function Underheal:RefreshOptions()
 	self.optionsFrame.tankCheck:SetChecked(UnderhealDB.raidFrame.showTanks)
 	self.optionsFrame.targetOfTargetCheck:SetChecked(UnderhealDB.raidFrame.showTargetOfTarget)
 	self.optionsFrame.petCheck:SetChecked(UnderhealDB.raidFrame.showPets)
+	self.optionsFrame.resourceStatsCheck:SetChecked(UnderhealDB.resourceStats.enabled)
 	self.optionsFrame.buffCheck:SetChecked(UnderhealDB.raidFrame.showBuffButtons)
 	self.optionsFrame.clickBuffCheck:SetChecked(UnderhealDB.raidFrame.clickToBuff)
 	self.optionsFrame.magicDebuffCheck:SetChecked(UnderhealDB.raidFrame.showMagicDebuffs)
@@ -5321,6 +5884,7 @@ function Underheal:CreateBuffOptionsFrame()
 	local enabledLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	enabledLabel:SetPoint("LEFT", enabledCheck, "RIGHT", 2, 1)
 	enabledLabel:SetText("Enable this buff button")
+	AddTooltip(enabledCheck, "Enable buff button", "Shows this buff tab beside players it applies to.")
 
 	local function AddLabel(text, x, y)
 		local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -5350,6 +5914,9 @@ function Underheal:CreateBuffOptionsFrame()
 	frame.labelBox = AddEditBox("Button label", -126, function(config, text) config.label = text end)
 	frame.castBox = AddEditBox("Spell to cast", -158, function(config, text) config.cast = text end)
 	frame.auraBox = AddEditBox("Buff to check", -190, function(config, text) config.aura = text end)
+	AddTooltip(frame.labelBox, "Button label", "Short text shown on the side tab, such as F, S or W.")
+	AddTooltip(frame.castBox, "Spell to cast", "The spell this tab casts when clicked.")
+	AddTooltip(frame.auraBox, "Buff to check", "The buff name Underheal looks for before showing missing-buff colour.")
 
 	AddLabel("Missing color", 22, -230)
 	local missingSwatch = CreateFrame("Button", nil, frame)
@@ -5361,6 +5928,7 @@ function Underheal:CreateBuffOptionsFrame()
 		local config = UnderhealDB.buffButtons[Underheal.selectedBuffIndex or 1]
 		Underheal:OpenColorPicker(config, "missingColor", self)
 	end)
+	AddTooltip(missingSwatch, "Missing color", "Health bar colour when this buff is missing.")
 	frame.missingSwatch = missingSwatch
 
 	AddLabel("Priority color", 190, -230)
@@ -5373,6 +5941,7 @@ function Underheal:CreateBuffOptionsFrame()
 		local config = UnderhealDB.buffButtons[Underheal.selectedBuffIndex or 1]
 		Underheal:OpenColorPicker(config, "priorityColor", self)
 	end)
+	AddTooltip(prioritySwatch, "Priority color", "Health bar colour for priority roles missing this buff.")
 	frame.prioritySwatch = prioritySwatch
 
 	AddLabel("Priority roles", 22, -268)
@@ -5387,6 +5956,7 @@ function Underheal:CreateBuffOptionsFrame()
 			config.priorityRoles[self.roleKey] = not not self:GetChecked()
 			Underheal:ApplyBuffButtons()
 		end)
+		AddTooltip(check, role.label, "Uses the brighter priority colour for this role.")
 		local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		label:SetPoint("LEFT", check, "RIGHT", 0, 1)
 		label:SetText(role.label)
@@ -5407,6 +5977,7 @@ function Underheal:CreateBuffOptionsFrame()
 			config.classes[self.classKey] = not not self:GetChecked()
 			Underheal:ApplyBuffButtons()
 		end)
+		AddTooltip(check, class.label, "Only show and check this buff for this class.")
 		local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		label:SetPoint("LEFT", check, "RIGHT", 0, 1)
 		label:SetText(class.label)
@@ -5416,6 +5987,7 @@ function Underheal:CreateBuffOptionsFrame()
 	frame.expiryWarningBox = AddEditBox("Warn before expiry", -414, function(config, text)
 		config.warnBeforeExpirySeconds = math.max(0, tonumber(text) or 0)
 	end)
+	AddTooltip(frame.expiryWarningBox, "Warn before expiry", "Shows the missing-buff colour this many seconds before the buff expires.")
 	local expiryWarningSuffix = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	expiryWarningSuffix:SetPoint("LEFT", frame.expiryWarningBox, "RIGHT", 6, 0)
 	expiryWarningSuffix:SetText("seconds")
@@ -5454,7 +6026,6 @@ function Underheal:RefreshClickCastOptions()
 		row.rightBox:SetText(config.right or "")
 		row.trinketCheck:SetChecked(config.useTrinkets)
 	end
-	frame.superResponsiveCheck:SetChecked(UnderhealDB.raidFrame.superResponsiveMode)
 end
 
 function Underheal:CreateClickCastOptionsFrame()
@@ -5463,7 +6034,7 @@ function Underheal:CreateClickCastOptionsFrame()
 	end
 
 	local frame = CreateFrame("Frame", "UnderhealClickCastOptionsFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
-	frame:SetSize(560, 304)
+	frame:SetSize(560, 260)
 	frame:SetPoint("CENTER", UIParent, "CENTER", 290, -230)
 	frame:SetFrameStrata("DIALOG")
 	frame:SetFrameLevel(82)
@@ -5526,8 +6097,10 @@ function Underheal:CreateClickCastOptionsFrame()
 			end)
 			box:SetScript("OnEditFocusLost", function(self)
 				UnderhealDB.clickCasts[entry.key][field] = self:GetText() or ""
+				ClearRangeCheckSpellCache()
 				Underheal:ApplyBuffButtons()
 			end)
+			AddTooltip(box, entry.label .. " " .. field .. " click", "Spell cast by this click. Leave blank to use normal targeting.")
 			return box
 		end
 
@@ -5540,26 +6113,16 @@ function Underheal:CreateClickCastOptionsFrame()
 			UnderhealDB.clickCasts[entry.key].useTrinkets = not not self:GetChecked()
 			Underheal:ApplyBuffButtons()
 		end)
+		AddTooltip(row.trinketCheck, "Use trinkets", "Tries usable trinkets in slots 13 and 14 before the spell.")
 
 		frame.rows[index] = row
 	end
-
-	local superResponsiveCheck = CreateFrame("CheckButton", nil, frame, "InterfaceOptionsCheckButtonTemplate")
-	superResponsiveCheck:SetPoint("BOTTOMLEFT", 20, 48)
-	superResponsiveCheck:SetScript("OnClick", function(self)
-		UnderhealDB.raidFrame.superResponsiveMode = not not self:GetChecked()
-	end)
-	frame.superResponsiveCheck = superResponsiveCheck
-
-	local superResponsiveLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	superResponsiveLabel:SetPoint("LEFT", superResponsiveCheck, "RIGHT", 2, 1)
-	superResponsiveLabel:SetText("Super responsive mode")
 
 	local hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	hint:SetPoint("BOTTOMLEFT", 24, 24)
 	hint:SetWidth(500)
 	hint:SetJustifyH("LEFT")
-	hint:SetText("Super responsive mode cancels your current heal when you click a different player. Trinkets try slots 13 and 14 before the spell.")
+	hint:SetText("Trinkets try slots 13 and 14 before the spell.")
 
 	self.clickCastOptionsFrame = frame
 	return frame
@@ -5619,6 +6182,7 @@ function Underheal:CreateOptionsFrame()
 		SetRaidFramesUnlocked(self:GetChecked())
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(unlockCheck, "Unlock frames", "Shows drag handles for Underheal frames so setup is obvious.")
 	frame.unlockCheck = unlockCheck
 
 	local unlockLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5640,6 +6204,7 @@ function Underheal:CreateOptionsFrame()
 		Underheal:ApplyGroupMarkers()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(groupCheck, "Grouped raid frames", "Keeps Blizzard raid frames ordered by raid group.")
 	frame.groupCheck = groupCheck
 
 	local groupLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5659,6 +6224,7 @@ function Underheal:CreateOptionsFrame()
 		Underheal:UpdateTankWatch()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(tankCheck, "Show tanks", "Shows assigned raid tanks in the separate tank panel.")
 	frame.tankCheck = tankCheck
 
 	local tankLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5669,9 +6235,11 @@ function Underheal:CreateOptionsFrame()
 	targetOfTargetCheck:SetPoint("TOPLEFT", 178, -166)
 	targetOfTargetCheck:SetScript("OnClick", function(self)
 		UnderhealDB.raidFrame.showTargetOfTarget = not not self:GetChecked()
+		UnderhealDB.raidFrame.targetOfTargetOptIn = UnderhealDB.raidFrame.showTargetOfTarget
 		Underheal:UpdateTargetOfTargetWatch()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(targetOfTargetCheck, "Show ToT", "Optional target-of-target healing panel; disabled by default.")
 	frame.targetOfTargetCheck = targetOfTargetCheck
 
 	local targetOfTargetLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5685,11 +6253,27 @@ function Underheal:CreateOptionsFrame()
 		Underheal:UpdatePetWatch()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(petCheck, "Show raid pets", "Shows raid pets in their own panel for debuffs and emergencies.")
 	frame.petCheck = petCheck
 
 	local petLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	petLabel:SetPoint("LEFT", petCheck, "RIGHT", 2, 1)
 	petLabel:SetText("Show raid pets")
+
+	local resourceStatsCheck = CreateFrame("CheckButton", nil, frame, "InterfaceOptionsCheckButtonTemplate")
+	resourceStatsCheck:SetPoint("TOPLEFT", 178, -198)
+	resourceStatsCheck:SetScript("OnClick", function(self)
+		UnderhealDB.resourceStats.enabled = not not self:GetChecked()
+		Underheal:ResetResourceStatsSamples()
+		Underheal:UpdateResourceStatsFrame()
+		Underheal:RefreshOptions()
+	end)
+	AddTooltip(resourceStatsCheck, "Show mana stats", "Shows recent mana burn, time to OOM, and target death estimate.")
+	frame.resourceStatsCheck = resourceStatsCheck
+
+	local resourceStatsLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	resourceStatsLabel:SetPoint("LEFT", resourceStatsCheck, "RIGHT", 2, 1)
+	resourceStatsLabel:SetText("Show mana stats")
 
 	local buffCheck = CreateFrame("CheckButton", nil, frame, "InterfaceOptionsCheckButtonTemplate")
 	buffCheck:SetPoint("TOPLEFT", 18, -230)
@@ -5698,6 +6282,7 @@ function Underheal:CreateOptionsFrame()
 		Underheal:ApplyBuffButtons()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(buffCheck, "Show buff buttons", "Shows configurable buff tabs beside each player.")
 	frame.buffCheck = buffCheck
 
 	local buffLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5712,6 +6297,7 @@ function Underheal:CreateOptionsFrame()
 		Underheal:ApplyBuffButtons()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(clickBuffCheck, "Click to buff", "Clicking a coloured missing-buff frame casts that missing buff first.")
 	frame.clickBuffCheck = clickBuffCheck
 
 	local clickBuffLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5726,6 +6312,7 @@ function Underheal:CreateOptionsFrame()
 		Underheal:ApplyBuffButtons()
 		Underheal:RefreshPowerInfusionVisuals()
 	end)
+	AddTooltip(specialPowerCheck, "Special power", "Adds a class-targeted spell button, such as Power Infusion for mages.")
 	frame.specialPowerCheck = specialPowerCheck
 
 	local specialPowerLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -5756,6 +6343,10 @@ function Underheal:CreateOptionsFrame()
 	frame.specialLabelBox = AddSpecialEditBox("Button text", -366, "label")
 	frame.specialClassBox = AddSpecialEditBox("Target class", -398, "targetClass")
 	frame.specialPlayerBox = AddSpecialEditBox("Chosen player", -430, "chosenPlayer")
+	AddTooltip(frame.specialSpellBox, "Special spell", "Spell cast by the extra right-side button, for example Power Infusion.")
+	AddTooltip(frame.specialLabelBox, "Button text", "Short text displayed on the special spell button.")
+	AddTooltip(frame.specialClassBox, "Target class", "Class that should receive this button, such as MAGE.")
+	AddTooltip(frame.specialPlayerBox, "Chosen player", "Optional player name that gets the extra pulsing border.")
 
 	local debuffLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	debuffLabel:SetPoint("TOPLEFT", 22, -470)
@@ -5769,6 +6360,7 @@ function Underheal:CreateOptionsFrame()
 			Underheal:SkinRaidFrames()
 			Underheal:RefreshOptions()
 		end)
+		AddTooltip(check, name .. " debuffs", "Colours frames when this debuff type is present.")
 		local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		label:SetPoint("LEFT", check, "RIGHT", 0, 1)
 		label:SetText(name)
@@ -5806,6 +6398,7 @@ function Underheal:CreateOptionsFrame()
 		frame.scaleValue:SetText(math.floor((rounded * 100) + 0.5) .. "%")
 		Underheal:ApplyRaidFrameScale()
 	end)
+	AddTooltip(scaleSlider, "Raid frame scale", "Changes the size of Blizzard raid frames controlled by Underheal.")
 	frame.scaleSlider = scaleSlider
 
 	local buffOptions = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -5815,6 +6408,7 @@ function Underheal:CreateOptionsFrame()
 	buffOptions:SetScript("OnClick", function()
 		Underheal:ToggleBuffOptions()
 	end)
+	AddTooltip(buffOptions, "Configure Buffs", "Edit buff tabs, missing colours, classes and priority roles.")
 
 	local clickOptions = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 	clickOptions:SetSize(120, 24)
@@ -5823,6 +6417,7 @@ function Underheal:CreateOptionsFrame()
 	clickOptions:SetScript("OnClick", function()
 		Underheal:ToggleClickCastOptions()
 	end)
+	AddTooltip(clickOptions, "Configure Clicks", "Edit left and right click healing spells for each modifier.")
 
 	local presetLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	presetLabel:SetPoint("TOPLEFT", 22, -666)
@@ -5832,10 +6427,11 @@ function Underheal:CreateOptionsFrame()
 		local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 		button:SetSize(126, 22)
 		button:SetPoint("TOPLEFT", x, -682)
-		button:SetText(label)
+		button:SetText("For " .. label)
 		button:SetScript("OnClick", function()
 			Underheal:LoadRecommendedPreset(classFile)
 		end)
+		AddTooltip(button, "Recommended for " .. label, "Loads sensible buff and click-cast defaults for this class.")
 		return button
 	end
 
@@ -5851,6 +6447,7 @@ function Underheal:CreateOptionsFrame()
 		Underheal:RestoreBlizzardPosition()
 		Underheal:RefreshOptions()
 	end)
+	AddTooltip(reset, "Reset Position", "Moves Blizzard raid frames back to a visible default spot.")
 
 	self.optionsFrame = frame
 	return frame
@@ -5896,11 +6493,13 @@ SetRaidFramesUnlocked = function(unlocked, quiet)
 	Underheal:UpdateSelfWatch()
 	Underheal:UpdateSelfWatchDragState()
 	Underheal:UpdateClickBuffToggleDragState()
+	Underheal:UpdateResourceStatsFrame()
+	Underheal:UpdateResourceStatsDragState()
 	Underheal:RefreshOptions()
 
 	if not quiet then
 		if unlocked then
-			Print("Mover shown. Drag the Underheal bar, self bar, Tanks panel, ToT panel, or click-to-buff button, then type /underheal lock.")
+			Print("Mover shown. Drag the Underheal bar, self bar, Tanks panel, ToT panel, mana stats, or click-to-buff button, then type /underheal lock.")
 		else
 			Print("Raid frame mover hidden.")
 		end
@@ -5917,9 +6516,9 @@ local function PrintHelp()
 	Print("/underheal pets - toggle the raid pet watch")
 	Print("/underheal buffs - toggle buff buttons")
 	Print("/underheal clickbuff - toggle clicking raid frames to buff")
+	Print("/underheal stats - toggle mana stats")
 	Print("/underheal buffconfig - configure buff buttons")
 	Print("/underheal clickconfig - configure click-casting")
-	Print("/underheal importlegacy - copy the old account-wide profile to this character")
 	Print("/underheal reset - restore Blizzard raid frames to a visible default spot")
 end
 
@@ -5964,6 +6563,7 @@ SlashCmdList.UNDERHEAL = function(input)
 		Print("Tank watch " .. (UnderhealDB.raidFrame.showTanks and "enabled." or "disabled."))
 	elseif command == "tot" or command == "targettarget" then
 		UnderhealDB.raidFrame.showTargetOfTarget = not UnderhealDB.raidFrame.showTargetOfTarget
+		UnderhealDB.raidFrame.targetOfTargetOptIn = UnderhealDB.raidFrame.showTargetOfTarget
 		Underheal:UpdateTargetOfTargetWatch()
 		Underheal:RefreshOptions()
 		Print("Target-of-target watch " .. (UnderhealDB.raidFrame.showTargetOfTarget and "enabled." or "disabled."))
@@ -5978,12 +6578,16 @@ SlashCmdList.UNDERHEAL = function(input)
 		Underheal:ApplyBuffButtons()
 		Underheal:RefreshOptions()
 		Print("Click-to-buff " .. (UnderhealDB.raidFrame.clickToBuff and "enabled." or "disabled."))
+	elseif command == "stats" or command == "mana" then
+		UnderhealDB.resourceStats.enabled = not UnderhealDB.resourceStats.enabled
+		Underheal:ResetResourceStatsSamples()
+		Underheal:UpdateResourceStatsFrame()
+		Underheal:RefreshOptions()
+		Print("Mana stats " .. (UnderhealDB.resourceStats.enabled and "enabled." or "disabled."))
 	elseif command == "buffconfig" or command == "buffsconfig" then
 		Underheal:ToggleBuffOptions()
 	elseif command == "clickconfig" or command == "clickcast" then
 		Underheal:ToggleClickCastOptions()
-	elseif command == "importlegacy" then
-		Underheal:ImportLegacyProfile()
 	elseif command == "reset" or command == "restore" then
 		Underheal:RestoreBlizzardPosition()
 	elseif command == "help" then
@@ -6032,6 +6636,7 @@ Underheal:SetScript("OnUpdate", function(self, elapsed)
 	self:PollBuffWarnings(elapsed)
 	self:PollHealthBars(elapsed)
 	self:PollThreatIndicators(elapsed)
+	self:PollResourceStats(elapsed)
 	self:ProcessQueuedRefreshes(elapsed)
 	self:ProcessAnimations(elapsed)
 end)
@@ -6060,6 +6665,7 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 		self:UpdateTankWatch()
 		self:UpdateTargetOfTargetWatch()
 		self:UpdatePetWatch()
+		self:UpdateResourceStatsFrame()
 		self:RefreshPullAnnounceState()
 		Print("Loaded. Type /underheal to open options.")
 	elseif event == "PLAYER_ENTERING_WORLD" then
@@ -6072,6 +6678,7 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 		self.disabledForNonHealer = false
 		self:UpdateSelfWatch()
 		self:UpdateTargetOfTargetWatch()
+		self:UpdateResourceStatsFrame()
 		self:RefreshPowerInfusionVisuals()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if self.disabledForNonHealer then
@@ -6127,6 +6734,7 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 		self:UpdateTankWatch()
 		self:UpdateTargetOfTargetWatch()
 		self:UpdatePetWatch()
+		self:UpdateResourceStatsFrame()
 		self:RefreshPullAnnounceState()
 	elseif event == "ADDON_LOADED" and addonName == "Blizzard_CompactRaidFrames" then
 		EnsureDefaults()
@@ -6149,6 +6757,7 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 		self:UpdateTankWatch()
 		self:UpdateTargetOfTargetWatch()
 		self:UpdatePetWatch()
+		self:UpdateResourceStatsFrame()
 		self:RefreshPullAnnounceState()
 	elseif event == "GROUP_ROSTER_UPDATE" then
 		if self.disabledForNonHealer then
@@ -6180,13 +6789,13 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 		end
 
 		self:RefreshPowerInfusionVisuals()
-		self:QueueRefresh(true, true, false, false, false, false)
 	elseif event == "SPELLS_CHANGED" then
 		if self.disabledForNonHealer then
 			return
 		end
 
 		ClearTable(KNOWN_SPELL_CACHE)
+		ClearRangeCheckSpellCache()
 		self:RefreshPowerInfusionVisuals()
 		self:QueueRefresh(true, true, false, false, true, false)
 	elseif event == "BAG_UPDATE_DELAYED" then
@@ -6226,7 +6835,11 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 			return
 		end
 
-		self:QueueRefresh(false, false, false, true, false, false)
+		if addonName and UnitExists(addonName) then
+			self:RefreshIncomingHealsForUnit(addonName)
+		else
+			self:QueueRefresh(false, false, false, true, false, false)
+		end
 	elseif event == "UNIT_SPELLCAST_SENT" then
 		if self.disabledForNonHealer then
 			return
@@ -6292,9 +6905,6 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 			self:UpdateSelfWatch()
 			return
 		end
-		if event == "UNIT_AURA" and unit then
-			self:UpdateTankPolymorphAlert()
-		end
 		if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
 			self:UpdateLowHealthAlert()
 		end
@@ -6302,13 +6912,14 @@ Underheal:SetScript("OnEvent", function(self, event, ...)
 			self:QueueRefresh(false, false, false, true, false, true)
 		end
 		if unit and (unit == "player" or string.match(unit, "^raid%d+$") or string.match(unit, "^party%d+$")) then
-			self:UpdateTankUnit(unit)
+			local tankUpdated = self:UpdateTankUnit(unit)
 			if event == "UNIT_AURA" then
+				if tankUpdated then
+					self:UpdateTankPolymorphAlert()
+				end
 				self:UpdateRaidUnitVisual(unit, true)
-				self:QueueRefresh(false, true, false, false, false, false)
 			else
 				self:UpdateRaidUnitVisual(unit, false)
-				self:QueueRefresh(false, false, false, true, false, false)
 			end
 		end
 		if unit == "targettarget" then
