@@ -2,7 +2,11 @@
 ## Title: Underheal
 ## Notes: Lightweight healer tools for Blizzard raid frames.
 ## Author: Ben
-## Version: 0.9
+## Version: 1.2
 ## SavedVariablesPerCharacter: UnderhealCharacterDB
 
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibHealComm-4.0\ChatThrottleLib.lua
+Libs\LibHealComm-4.0\LibHealComm-4.0.lua
 Underheal.lua
